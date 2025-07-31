@@ -1,0 +1,160 @@
+// Launchly Database Schema
+// AI-powered social platform for mini-applications
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User accounts and profiles
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  username    String   @unique
+  displayName String?
+  avatarUrl   String?
+  bio         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  apps              App[]
+  generationSessions GenerationSession[]
+  likes             Like[]
+  comments          Comment[]
+  followers         Follow[] @relation("UserFollowers")
+  following         Follow[] @relation("UserFollowing")
+  appViews          AppView[]
+  safetyReports     SafetyReport[]
+
+  @@map("users")
+}
+
+// AI-generated applications
+model App {
+  id           String   @id @default(cuid())
+  userId       String
+  title        String
+  description  String?
+  promptUsed   String   // Original user prompt
+  htmlContent  String   // Generated HTML
+  cssContent   String   // Generated CSS
+  jsContent    String   // Generated JavaScript
+  thumbnailUrl String?
+  isPublished  Boolean  @default(false)
+  safetyScore  Float    @default(0.0) // 0-1 safety assessment
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generationSessions GenerationSession[]
+  likes             Like[]
+  comments          Comment[]
+  appViews          AppView[]
+  safetyReports     SafetyReport[]
+
+  @@map("apps")
+}
+
+// AI conversation sessions for iterative improvement
+model GenerationSession {
+  id                 String   @id @default(cuid())
+  userId             String
+  appId              String?
+  conversationHistory Json     // Array of messages between user and AI
+  createdAt          DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app  App? @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@map("generation_sessions")
+}
+
+// Social interactions - likes
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  appId     String
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app  App  @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, appId])
+  @@map("likes")
+}
+
+// Social interactions - comments
+model Comment {
+  id        String   @id @default(cuid())
+  userId    String
+  appId     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app  App  @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+// Social interactions - follows
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  // Relations
+  follower  User @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+}
+
+// Feed algorithm - track app views for recommendations
+model AppView {
+  id                  String   @id @default(cuid())
+  userId              String
+  appId               String
+  viewedAt            DateTime @default(now())
+  interactionDuration Int?     // Seconds spent interacting
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app  App  @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@map("app_views")
+}
+
+// Content moderation and safety
+model SafetyReport {
+  id         String            @id @default(cuid())
+  appId      String
+  reporterId String
+  reason     String
+  status     SafetyReportStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+
+  // Relations
+  app      App  @relation(fields: [appId], references: [id], onDelete: Cascade)
+  reporter User @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@map("safety_reports")
+}
+
+enum SafetyReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
